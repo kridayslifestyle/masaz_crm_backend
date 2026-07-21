@@ -31,11 +31,11 @@ app = FastAPI(
 )
 
 # ── CORS — allow Next.js frontend ─────────────────────────────────────────────
-allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
+# allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["http://localhost:3000,https://masaz-crm.vercel.app"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
