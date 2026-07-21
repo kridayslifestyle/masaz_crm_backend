@@ -18,6 +18,7 @@ from app.routers import settings
 from app.routers import auth
 from app.routers import users
 from app.routers import notifications
+from app.services.seed_admin import seed_admin
 
 load_dotenv()
 
@@ -70,6 +71,8 @@ def on_startup():
     db = SessionLocal()
     try:
         seed_default_slabs(db)
+
+        seed_admin(db)
     finally:
         db.close()
 
