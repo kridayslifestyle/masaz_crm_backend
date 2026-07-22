@@ -13,7 +13,7 @@ from app.schemas.collection import (
     RevenueSummary,
 )
 
-router = APIRouter(prefix="/api/collections", tags=["Collections"])
+router = APIRouter(prefix="/api/collections/", tags=["Collections"])
 
 
 @router.get("/", response_model=List[CollectionResponse])
