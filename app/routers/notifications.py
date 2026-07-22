@@ -10,7 +10,7 @@ router = APIRouter(
     tags=["Notifications"]
 )
 
-@router.get("/")
+@router.get("")
 def get_notifications(
     db: Session = Depends(get_db)
 ):

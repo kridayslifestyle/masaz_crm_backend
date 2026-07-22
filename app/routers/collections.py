@@ -13,10 +13,10 @@ from app.schemas.collection import (
     RevenueSummary,
 )
 
-router = APIRouter(prefix="/api/collections/", tags=["Collections"])
+router = APIRouter(prefix="/api/collections", tags=["Collections"])
 
 
-@router.get("/", response_model=List[CollectionResponse])
+@router.get("", response_model=List[CollectionResponse])
 def get_collections(
     store_id: Optional[int] = None,
     chair_id: Optional[int] = None,

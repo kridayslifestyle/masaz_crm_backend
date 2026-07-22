@@ -35,7 +35,7 @@ def create_maintenance(
 
     return record
 
-@router.get("/")
+@router.get("")
 def get_maintenance(
     db: Session = Depends(get_db)
 ):

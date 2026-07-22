@@ -12,7 +12,7 @@ router = APIRouter(
 )
 
 
-@router.get("/")
+@router.get("")
 def machine_health(
     db: Session = Depends(get_db)
 ):

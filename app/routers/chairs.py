@@ -15,7 +15,7 @@ from datetime import date
 router = APIRouter(prefix="/api/chairs", tags=["Chairs"])
 
 
-@router.get("/")
+@router.get("")
 def get_all_chairs(
     status: Optional[ChairStatus] = None,
     store_id: Optional[int] = None,

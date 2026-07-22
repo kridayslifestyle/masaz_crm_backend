@@ -92,7 +92,7 @@ def generate_alerts(
             generated
     }
 
-@router.get("/")
+@router.get("")
 def get_alerts(
     db: Session = Depends(get_db)
 ):
