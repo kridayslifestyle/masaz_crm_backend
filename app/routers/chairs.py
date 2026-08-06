@@ -24,9 +24,7 @@ def get_all_chairs(
     limit: int = Query(default=100, le=500),
     db: Session = Depends(get_db),
 ):
-    from datetime import date
-    from sqlalchemy import func
-    from app.models import Collection
+   
 
     query = db.query(Chair)
 
@@ -115,7 +113,7 @@ def get_chair(chair_id: int, db: Session = Depends(get_db)):
     return response
 
 
-@router.post("/", response_model=ChairResponse, status_code=201)
+@router.post("", response_model=ChairResponse, status_code=201)
 def create_chair(data: ChairCreate, db: Session = Depends(get_db)):
     if data.installed_by_employee_id:
 
@@ -153,9 +151,32 @@ def create_chair(data: ChairCreate, db: Session = Depends(get_db)):
         chair.installed_by.name if chair.installed_by else None
     )
 
-    maintenance_records = relationship("Maintenance", ck_populates="chair")
+
 
     return response
+
+@router.get("/stats/summary")
+def chairs_summary(db: Session = Depends(get_db)):
+    total = db.query(Chair).count()
+
+    active = db.query(Chair).filter(Chair.status == ChairStatus.active).count()
+
+    low = db.query(Chair).filter(Chair.status == ChairStatus.low_performing).count()
+
+    offline = db.query(Chair).filter(Chair.status == ChairStatus.offline).count()
+
+    maintenance = (
+        db.query(Chair).filter(Chair.status == ChairStatus.maintenance).count()
+    )
+
+    return {
+        "total": total,
+        "active": active,
+        "low_performing": low,
+        "offline": offline,
+        "maintenance": maintenance,
+    }
+
 
 
 @router.patch("/{chair_id}", response_model=ChairResponse)
@@ -208,24 +229,3 @@ def delete_chair(chair_id: int, db: Session = Depends(get_db)):
     return {"message": "Chair moved to maintenance"}
 
 
-@router.get("/stats/summary")
-def chairs_summary(db: Session = Depends(get_db)):
-    total = db.query(Chair).count()
-
-    active = db.query(Chair).filter(Chair.status == ChairStatus.active).count()
-
-    low = db.query(Chair).filter(Chair.status == ChairStatus.low_performing).count()
-
-    offline = db.query(Chair).filter(Chair.status == ChairStatus.offline).count()
-
-    maintenance = (
-        db.query(Chair).filter(Chair.status == ChairStatus.maintenance).count()
-    )
-
-    return {
-        "total": total,
-        "active": active,
-        "low_performing": low,
-        "offline": offline,
-        "maintenance": maintenance,
-    }

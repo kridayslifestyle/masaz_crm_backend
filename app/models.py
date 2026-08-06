@@ -64,12 +64,12 @@ class Store(Base):
 
     # Relationships
     chairs = relationship("Chair", back_populates="store")
+    service_complaints = relationship("ServiceComplaint", back_populates="store")
     collections = relationship("Collection", back_populates="store")
 
     payouts = relationship("Payout", back_populates="store")
 
     # ── Bank Details ───────────────────────────────────────────────────────────────
-
 
     account_holder_name = Column(String, nullable=True)
 
@@ -79,15 +79,13 @@ class Store(Base):
 
     ifsc_code = Column(String, nullable=True)
 
-
-# ── Payment Details ────────────────────────────────────────────────────────────
+    # ── Payment Details ────────────────────────────────────────────────────────────
 
     payment_invoice = Column(String, nullable=True)
 
     payment_date = Column(Date, nullable=True)
 
-
-# ── Store Login Credentials ────────────────────────────────────────────────────
+    # ── Store Login Credentials ────────────────────────────────────────────────────
 
     store_username = Column(String, unique=True, nullable=True)
 
@@ -129,7 +127,7 @@ class Chair(Base):
 
     # Relationships
     store = relationship("Store", back_populates="chairs")
-
+    service_complaints = relationship("ServiceComplaint", back_populates="chair")
     collections = relationship("Collection", back_populates="chair")
 
     installed_by = relationship("Employee")
@@ -353,3 +351,93 @@ class Notification(Base):
 
     chair = relationship("Chair")
     store = relationship("Store")
+
+
+class ServiceStatus(str, enum.Enum):
+    open = "open"
+    in_progress = "in_progress"
+    resolved = "resolved"
+
+
+class ServicePriority(str, enum.Enum):
+    low = "low"
+    medium = "medium"
+    high = "high"
+    critical = "critical"
+
+
+class ProblemCategory(str, enum.Enum):
+    power_issue = "power_issue"
+    massage_mechanism = "massage_mechanism"
+    motor_issue = "motor_issue"
+    remote_display = "remote_display"
+    airbag_issue = "airbag_issue"
+    recliner_issue = "recliner_issue"
+    noise_vibration = "noise_vibration"
+    payment_issue = "payment_issue"
+    electrical_issue = "electrical_issue"
+    other = "other"
+
+
+class ServiceComplaint(Base):
+    __tablename__ = "service_complaints"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Relations
+    store_id = Column(Integer, ForeignKey("stores.id"), nullable=False, index=True)
+
+    chair_id = Column(Integer, ForeignKey("chairs.id"), nullable=False, index=True)
+
+    # Complaint information
+    complaint_date = Column(Date, nullable=False)
+
+    reported_by = Column(String, nullable=True)
+
+    customer_name = Column(String, nullable=True)
+
+    customer_phone = Column(String, nullable=True)
+
+    problem_category = Column(Enum(ProblemCategory), nullable=False)
+
+    problem_description = Column(Text, nullable=False)
+
+    priority = Column(
+        Enum(ServicePriority), nullable=False, default=ServicePriority.medium
+    )
+
+    status = Column(Enum(ServiceStatus), nullable=False, default=ServiceStatus.open)
+
+    # Technician / service information
+    technician_name = Column(String, nullable=True)
+
+    visit_date = Column(Date, nullable=True)
+
+    # Resolution information
+    actual_problem = Column(Text, nullable=True)
+
+    resolution_details = Column(Text, nullable=True)
+
+    parts_replaced = Column(Text, nullable=True)
+
+    service_cost = Column(Float, nullable=True)
+
+    resolution_date = Column(Date, nullable=True)
+
+    notes = Column(Text, nullable=True)
+
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    # Relationships
+    store = relationship("Store", back_populates="service_complaints")
+
+    chair = relationship("Chair", back_populates="service_complaints")

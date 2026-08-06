@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 import os
 from app.services.scheduler import scheduler
 from app.database import engine, Base, SessionLocal
-from app.routers import chairs, stores, collections, upload, dashboard
+from app.routers import chairs, stores, collections, upload, dashboard,service
 from app.services.revenue_slab import seed_default_slabs
 from app.routers import payouts
 from app.routers import employees
@@ -61,6 +61,7 @@ app.include_router(settings.router)
 app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(notifications.router)
+app.include_router(service.router)
 
 # ── Startup ────────────────────────────────────────────────────────────────────
 @app.on_event("startup")
