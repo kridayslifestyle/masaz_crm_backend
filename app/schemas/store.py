@@ -25,9 +25,19 @@ class StoreBase(BaseModel):
 
     gst_number: Optional[str] = None
 
+    account_holder_name: Optional[str] = None
+    bank_name: Optional[str] = None
+    account_number: Optional[str] = None
+    ifsc_code: Optional[str] = None
+
+    payment_invoice: Optional[str] = None
+    payment_date: Optional[date] = None
+
+    store_username: Optional[str] = None
+
 
 class StoreCreate(StoreBase):
-    pass
+    store_password: Optional[str] = None
 
 
 class StoreUpdate(BaseModel):
@@ -51,6 +61,9 @@ class StoreUpdate(BaseModel):
 
     gst_number: Optional[str] = None
 
+    store_username: Optional[str] = None
+    store_password: Optional[str] = None
+
 
 class StoreResponse(StoreBase):
     id: int
@@ -63,3 +76,7 @@ class StoreResponse(StoreBase):
 
     class Config:
         from_attributes = True
+
+class StoreCredentialsResponse(BaseModel):
+    store_username: Optional[str] = None
+    store_password: Optional[str] = None
