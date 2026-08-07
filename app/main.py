@@ -17,6 +17,7 @@ from app.routers import reports
 from app.routers import settings
 from app.routers import auth
 from app.routers import users
+from app.routers import service
 from app.routers import notifications
 from app.services.seed_admin import seed_admin
 
