@@ -441,3 +441,11 @@ class ServiceComplaint(Base):
     store = relationship("Store", back_populates="service_complaints")
 
     chair = relationship("Chair", back_populates="service_complaints")
+
+class Technician(Base):
+    __tablename__ = "technicians"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    phone = Column(String)
+    status = Column(String, default="active")
