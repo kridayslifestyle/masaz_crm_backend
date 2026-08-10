@@ -3,7 +3,7 @@ from app.database import SessionLocal
 from app.models import Technician
 from pydantic import BaseModel
 
-router = APIRouter()
+router = APIRouter(prefix="/api")
 
 
 # ✅ SCHEMA
