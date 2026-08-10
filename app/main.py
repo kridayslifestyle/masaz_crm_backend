@@ -21,7 +21,7 @@ from app.routers import service
 from app.routers import notifications
 from app.routers import  technician
 from app.services.seed_admin import seed_admin
-
+from app.routers import service
 load_dotenv()
 
 # Create all tables on startup
@@ -65,6 +65,7 @@ app.include_router(users.router)
 app.include_router(notifications.router)
 app.include_router(service.router)
 app.include_router(technician.router)
+app.include_router(service.router)
 
 # ── Startup ────────────────────────────────────────────────────────────────────
 @app.on_event("startup")
