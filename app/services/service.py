@@ -6,12 +6,10 @@ from app.models import ServiceComplaint
 router = APIRouter(prefix="/api/service", tags=["Service"])
 
 
-# ✅ Request Body
 class StartServiceRequest(BaseModel):
     technician_id: int
 
 
-# ✅ START SERVICE API
 @router.patch("/{complaint_id}/start")
 def start_service(complaint_id: int, data: StartServiceRequest):
     db = SessionLocal()
@@ -23,7 +21,6 @@ def start_service(complaint_id: int, data: StartServiceRequest):
     if not complaint:
         raise HTTPException(status_code=404, detail="Complaint not found")
 
-    # ✅ Assign technician + update status
     complaint.technician_id = data.technician_id
     complaint.status = "in_progress"
 
@@ -31,6 +28,6 @@ def start_service(complaint_id: int, data: StartServiceRequest):
     db.refresh(complaint)
 
     return {
-        "message": "Service started successfully",
+        "message": "Service started",
         "data": complaint
     }
