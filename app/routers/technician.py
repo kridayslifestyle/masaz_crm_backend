@@ -1,6 +1,6 @@
 from fastapi import APIRouter
-from database import SessionLocal
-from models import Technician
+from app.database import SessionLocal
+from app.models import Technician
 
 router = APIRouter()
 
