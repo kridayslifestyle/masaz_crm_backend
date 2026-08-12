@@ -9,8 +9,8 @@ from reportlab.lib.styles import getSampleStyleSheet
 import tempfile
 
 from app.database import get_db
-from app.models import Collection, Chair, Store, Employee, Alert
-from app.routers import settings
+from app.models import Collection, Chair, Store, Employee, Alert,Settings
+# from app.routers import settings
 
 router = APIRouter(prefix="/api/reports", tags=["Reports"])
 
@@ -19,8 +19,47 @@ router = APIRouter(prefix="/api/reports", tags=["Reports"])
 def monthly_report(
     month: int,
     year: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
+    # ---------------------------------------------------------
+    # GET SETTINGS
+    # ---------------------------------------------------------
+
+    settings_data = db.query(Settings).first()
+
+    # Create default settings if none exist
+    if not settings_data:
+        settings_data = Settings(
+            company_share_percentage=75,
+            store_share_percentage=25,
+            minimum_daily_revenue=500,
+            target_daily_revenue=1000,
+            alert_enabled=True,
+            whatsapp_enabled=False,
+            sms_enabled=False,
+            email_enabled=False,
+        )
+
+        db.add(settings_data)
+        db.commit()
+        db.refresh(settings_data)
+
+    company_percentage = (
+        settings_data.company_share_percentage
+    )
+
+    store_percentage = (
+        settings_data.store_share_percentage
+    )
+
+    # Convert percentage to decimal
+    company_rate = company_percentage / 100
+    store_rate = store_percentage / 100
+
+    # ---------------------------------------------------------
+    # TOTAL REVENUE
+    # ---------------------------------------------------------
+
     total_revenue = (
         db.query(func.sum(Collection.total_amount))
         .filter(
@@ -31,86 +70,145 @@ def monthly_report(
         or 0
     )
 
-    # Temporary revenue split
-    company_share = 0
-    store_share = 0
+    # ---------------------------------------------------------
+    # REVENUE SPLIT
+    # ---------------------------------------------------------
 
-    stores = db.query(Store).all()
+    company_share = (
+        total_revenue * company_rate
+    )
 
-    for store in stores:
+    store_share = (
+        total_revenue * store_rate
+    )
 
-        revenue = (
-            db.query(func.sum(Collection.total_amount))
-            .filter(
-                Collection.store_id == store.id,
-                extract("month", Collection.date) == month,
-                extract("year", Collection.date) == year,
-            )
-            .scalar()
-            or 0
-        )
+    # ---------------------------------------------------------
+    # BEST CHAIR
+    # ---------------------------------------------------------
 
-        company_share += revenue * 0.75
-        store_share += revenue * 0.25
-
-    # Best Chair
     best_chair = (
         db.query(
             Chair.device_id,
-            func.sum(Collection.total_amount).label("revenue")
+            func.sum(
+                Collection.total_amount
+            ).label("revenue"),
         )
-        .join(Collection, Collection.chair_id == Chair.id)
+        .join(
+            Collection,
+            Collection.chair_id == Chair.id,
+        )
         .filter(
-            extract("month", Collection.date) == month,
-            extract("year", Collection.date) == year,
+            extract(
+                "month",
+                Collection.date,
+            ) == month,
+            extract(
+                "year",
+                Collection.date,
+            ) == year,
         )
         .group_by(Chair.device_id)
-        .order_by(func.sum(Collection.total_amount).desc())
+        .order_by(
+            func.sum(
+                Collection.total_amount
+            ).desc()
+        )
         .first()
     )
 
-    # Lowest Chair
+    # ---------------------------------------------------------
+    # LOWEST CHAIR
+    # ---------------------------------------------------------
+
     lowest_chair = (
         db.query(
             Chair.device_id,
-            func.sum(Collection.total_amount).label("revenue")
+            func.sum(
+                Collection.total_amount
+            ).label("revenue"),
         )
-        .join(Collection, Collection.chair_id == Chair.id)
+        .join(
+            Collection,
+            Collection.chair_id == Chair.id,
+        )
         .filter(
-            extract("month", Collection.date) == month,
-            extract("year", Collection.date) == year,
+            extract(
+                "month",
+                Collection.date,
+            ) == month,
+            extract(
+                "year",
+                Collection.date,
+            ) == year,
         )
         .group_by(Chair.device_id)
-        .order_by(func.sum(Collection.total_amount).asc())
+        .order_by(
+            func.sum(
+                Collection.total_amount
+            ).asc()
+        )
         .first()
     )
 
-    # Best Store
+    # ---------------------------------------------------------
+    # BEST STORE
+    # ---------------------------------------------------------
+
     best_store = (
         db.query(
             Store.name,
-            func.sum(Collection.total_amount).label("revenue")
+            func.sum(
+                Collection.total_amount
+            ).label("revenue"),
         )
-        .join(Collection, Collection.store_id == Store.id)
+        .join(
+            Collection,
+            Collection.store_id == Store.id,
+        )
         .filter(
-            extract("month", Collection.date) == month,
-            extract("year", Collection.date) == year,
+            extract(
+                "month",
+                Collection.date,
+            ) == month,
+            extract(
+                "year",
+                Collection.date,
+            ) == year,
         )
         .group_by(Store.name)
-        .order_by(func.sum(Collection.total_amount).desc())
+        .order_by(
+            func.sum(
+                Collection.total_amount
+            ).desc()
+        )
         .first()
     )
 
-    # Revenue Trend
+    # ---------------------------------------------------------
+    # REVENUE TREND
+    # ---------------------------------------------------------
+
     revenue_trend = []
 
-    for m in range(max(1, month - 5), month + 1):
-
+    for m in range(
+        max(1, month - 5),
+        month + 1,
+    ):
         revenue = (
-            db.query(func.sum(Collection.total_amount))
+            db.query(
+                func.sum(
+                    Collection.total_amount
+                )
+            )
             .filter(
-                extract("month", Collection.date) == m,
-                extract("year", Collection.date) == year,
+                extract(
+                    "month",
+                    Collection.date,
+                ) == m,
+                extract(
+                    "year",
+                    Collection.date,
+                ) == year,
             )
             .scalar()
             or 0
@@ -119,11 +217,18 @@ def monthly_report(
         revenue_trend.append(
             {
                 "month": m,
-                "revenue": round(revenue, 2)
+                "year": year,
+                "revenue": round(
+                    revenue,
+                    2,
+                ),
             }
         )
 
-    # Sales Team Performance
+    # ---------------------------------------------------------
+    # SALES TEAM PERFORMANCE
+    # ---------------------------------------------------------
+
     sales_team = []
 
     employees = db.query(Employee).all()
@@ -131,10 +236,28 @@ def monthly_report(
     for employee in employees:
 
         revenue = (
-            db.query(func.sum(Collection.total_amount))
-            .join(Chair, Chair.id == Collection.chair_id)
+            db.query(
+                func.sum(
+                    Collection.total_amount
+                )
+            )
+            .join(
+                Chair,
+                Chair.id == Collection.chair_id,
+            )
             .filter(
-                Chair.installed_by_employee_id == employee.id
+                Chair.installed_by_employee_id
+                == employee.id,
+
+                extract(
+                    "month",
+                    Collection.date,
+                ) == month,
+
+                extract(
+                    "year",
+                    Collection.date,
+                ) == year,
             )
             .scalar()
             or 0
@@ -143,11 +266,17 @@ def monthly_report(
         sales_team.append(
             {
                 "employee": employee.name,
-                "revenue": round(revenue, 2)
+                "revenue": round(
+                    revenue,
+                    2,
+                ),
             }
         )
 
-    # Store Breakdown
+    # ---------------------------------------------------------
+    # STORE BREAKDOWN
+    # ---------------------------------------------------------
+
     store_breakdown = []
 
     stores = db.query(Store).all()
@@ -155,11 +284,23 @@ def monthly_report(
     for store in stores:
 
         revenue = (
-            db.query(func.sum(Collection.total_amount))
+            db.query(
+                func.sum(
+                    Collection.total_amount
+                )
+            )
             .filter(
                 Collection.store_id == store.id,
-                extract("month", Collection.date) == month,
-                extract("year", Collection.date) == year,
+
+                extract(
+                    "month",
+                    Collection.date,
+                ) == month,
+
+                extract(
+                    "year",
+                    Collection.date,
+                ) == year,
             )
             .scalar()
             or 0
@@ -167,7 +308,9 @@ def monthly_report(
 
         chair_count = (
             db.query(Chair)
-            .filter(Chair.store_id == store.id)
+            .filter(
+                Chair.store_id == store.id
+            )
             .count()
         )
 
@@ -176,45 +319,118 @@ def monthly_report(
                 "store_name": store.name,
                 "city": store.city,
                 "chairs": chair_count,
-                "gross": round(revenue, 2),
-                "company": round(revenue * 0.75, 2),
-                "partner": round(revenue * 0.25, 2),
+
+                "gross": round(
+                    revenue,
+                    2,
+                ),
+
+                "company": round(
+                    revenue * company_rate,
+                    2,
+                ),
+
+                "partner": round(
+                    revenue * store_rate,
+                    2,
+                ),
             }
         )
 
-    alerts_summary = {
-        "critical":
-            db.query(Alert)
-            .filter(Alert.severity == "critical")
-            .count(),
+    # ---------------------------------------------------------
+    # ALERT SUMMARY
+    # ---------------------------------------------------------
 
-        "warning":
+    alerts_summary = {
+        "critical": (
             db.query(Alert)
-            .filter(Alert.severity == "warning")
-            .count(),
+            .filter(
+                Alert.severity == "critical"
+            )
+            .count()
+        ),
+
+        "warning": (
+            db.query(Alert)
+            .filter(
+                Alert.severity == "warning"
+            )
+            .count()
+        ),
     }
+
+    # ---------------------------------------------------------
+    # RESPONSE
+    # ---------------------------------------------------------
 
     return {
         "summary": {
             "month": f"{month}/{year}",
-            "total_revenue": round(total_revenue, 2),
-            "company_share": round(company_share, 2),
-            "store_share": round(store_share, 2),
+
+            "total_revenue": round(
+                total_revenue,
+                2,
+            ),
+
+            "company_share": round(
+                company_share,
+                2,
+            ),
+
+            "store_share": round(
+                store_share,
+                2,
+            ),
+
+            "company_share_percentage": (
+                company_percentage
+            ),
+
+            "store_share_percentage": (
+                store_percentage
+            ),
         },
 
         "best_store": {
-            "name": best_store.name if best_store else None,
-            "revenue": float(best_store.revenue) if best_store else 0,
+            "name": (
+                best_store.name
+                if best_store
+                else None
+            ),
+
+            "revenue": (
+                float(best_store.revenue)
+                if best_store
+                else 0
+            ),
         },
 
         "best_chair": {
-            "device_id": best_chair.device_id if best_chair else None,
-            "revenue": float(best_chair.revenue) if best_chair else 0,
+            "device_id": (
+                best_chair.device_id
+                if best_chair
+                else None
+            ),
+
+            "revenue": (
+                float(best_chair.revenue)
+                if best_chair
+                else 0
+            ),
         },
 
         "lowest_chair": {
-            "device_id": lowest_chair.device_id if lowest_chair else None,
-            "revenue": float(lowest_chair.revenue) if lowest_chair else 0,
+            "device_id": (
+                lowest_chair.device_id
+                if lowest_chair
+                else None
+            ),
+
+            "revenue": (
+                float(lowest_chair.revenue)
+                if lowest_chair
+                else 0
+            ),
         },
 
         "revenue_trend": revenue_trend,

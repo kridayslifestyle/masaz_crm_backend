@@ -12,7 +12,7 @@ router = APIRouter(
     tags=["Revenue Analytics"]
 )
 
-# 🔥 COMMON FILTER FUNCTION
+
 def apply_date_filter(query, type, start_date, end_date):
     if type == "today":
         today = date.today()

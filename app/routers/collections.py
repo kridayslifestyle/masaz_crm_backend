@@ -4,6 +4,18 @@ from sqlalchemy import func
 from typing import List, Optional
 from datetime import date
 
+from fastapi.responses import StreamingResponse
+from io import StringIO
+import csv
+
+from app.models import (
+    Collection,
+    Chair,
+    Store,
+    CollectionStatus,
+    Settings,
+)
+
 from app.database import get_db
 from app.models import Collection, Chair, Store, CollectionStatus
 from app.schemas.collection import (
@@ -147,7 +159,7 @@ def update_collection(
     return response
 
 
-@router.get("/summary/totals", response_model=RevenueSummary)
+@router.get("/summary/totals")
 def get_revenue_summary(
     from_date: Optional[date] = None,
     to_date: Optional[date] = None,
@@ -157,20 +169,291 @@ def get_revenue_summary(
     query = db.query(Collection)
 
     if from_date:
-        query = query.filter(Collection.date >= from_date)
+        query = query.filter(
+            Collection.date >= from_date
+        )
 
     if to_date:
-        query = query.filter(Collection.date <= to_date)
+        query = query.filter(
+            Collection.date <= to_date
+        )
 
     if store_id:
-        query = query.filter(Collection.store_id == store_id)
+        query = query.filter(
+            Collection.store_id == store_id
+        )
 
-    result = query.with_entities(
-        func.sum(Collection.total_amount),
-        func.count(Collection.id),
-    ).first()
+    # -----------------------------------------
+    # TOTAL REVENUE
+    # -----------------------------------------
 
-    return RevenueSummary(
-        total_revenue=round(result[0] or 0, 2),
-        collection_count=result[1] or 0,
+    total_revenue = (
+        query.with_entities(
+            func.sum(Collection.total_amount)
+        )
+        .scalar()
+        or 0
+    )
+
+    collection_count = (
+        query.with_entities(
+            func.count(Collection.id)
+        )
+        .scalar()
+        or 0
+    )
+
+    # -----------------------------------------
+    # PENDING
+    # -----------------------------------------
+
+    pending_revenue = (
+        query.filter(
+            Collection.status == CollectionStatus.pending
+        )
+        .with_entities(
+            func.sum(Collection.total_amount)
+        )
+        .scalar()
+        or 0
+    )
+
+    pending_count = (
+        query.filter(
+            Collection.status == CollectionStatus.pending
+        )
+        .with_entities(
+            func.count(Collection.id)
+        )
+        .scalar()
+        or 0
+    )
+
+    # -----------------------------------------
+    # SETTINGS
+    # -----------------------------------------
+
+    settings = (
+        db.query(Settings)
+        .order_by(Settings.id.asc())
+        .first()
+    )
+
+    company_percentage = (
+        settings.company_share_percentage
+        if settings
+        else 75
+    )
+
+    store_percentage = (
+        settings.store_share_percentage
+        if settings
+        else 25
+    )
+
+    # -----------------------------------------
+    # SHARES
+    # -----------------------------------------
+
+    company_share = (
+        total_revenue
+        * company_percentage
+        / 100
+    )
+
+    store_share = (
+        total_revenue
+        * store_percentage
+        / 100
+    )
+
+    return {
+        "total_revenue": round(
+            total_revenue,
+            2
+        ),
+
+        "collection_count": collection_count,
+
+        "company_share": round(
+            company_share,
+            2
+        ),
+
+        "store_share": round(
+            store_share,
+            2
+        ),
+
+        "pending_revenue": round(
+            pending_revenue,
+            2
+        ),
+
+        "pending_count": pending_count,
+
+        "company_share_percentage":
+            company_percentage,
+
+        "store_share_percentage":
+            store_percentage,
+    }
+@router.get("/report")
+def download_collections_report(
+    from_date: Optional[date] = None,
+    to_date: Optional[date] = None,
+    store_id: Optional[int] = None,
+    status: Optional[CollectionStatus] = None,
+    db: Session = Depends(get_db),
+):
+    query = db.query(Collection)
+
+    # -----------------------------------------
+    # FILTERS
+    # -----------------------------------------
+
+    if from_date:
+        query = query.filter(
+            Collection.date >= from_date
+        )
+
+    if to_date:
+        query = query.filter(
+            Collection.date <= to_date
+        )
+
+    if store_id:
+        query = query.filter(
+            Collection.store_id == store_id
+        )
+
+    if status:
+        query = query.filter(
+            Collection.status == status
+        )
+
+    collections = (
+        query
+        .order_by(
+            Collection.date.desc(),
+            Collection.created_at.desc()
+        )
+        .all()
+    )
+
+    # -----------------------------------------
+    # SETTINGS
+    # -----------------------------------------
+
+    settings = (
+        db.query(Settings)
+        .order_by(Settings.id.asc())
+        .first()
+    )
+
+    company_percentage = (
+        settings.company_share_percentage
+        if settings
+        else 75
+    )
+
+    store_percentage = (
+        settings.store_share_percentage
+        if settings
+        else 25
+    )
+
+    # -----------------------------------------
+    # CSV
+    # -----------------------------------------
+
+    output = StringIO()
+
+    writer = csv.writer(output)
+
+    writer.writerow([
+        "Date",
+        "Chair",
+        "Store",
+        "Daily Income",
+        "Company Share",
+        "Store Share",
+        "Online Payment",
+        "Cash Payment",
+        "Change Amount",
+        "Transactions",
+        "Payment Status",
+        "Notes",
+    ])
+
+    for collection in collections:
+
+        total = float(
+            collection.total_amount or 0
+        )
+
+        company_share = (
+            total
+            * company_percentage
+            / 100
+        )
+
+        store_share = (
+            total
+            * store_percentage
+            / 100
+        )
+
+        writer.writerow([
+            collection.date,
+
+            collection.chair.device_id
+            if collection.chair
+            else "",
+
+            collection.store.name
+            if collection.store
+            else "",
+
+            round(total, 2),
+
+            round(company_share, 2),
+
+            round(store_share, 2),
+
+            round(
+                collection.online_payment or 0,
+                2
+            ),
+
+            round(
+                collection.cash_payment or 0,
+                2
+            ),
+
+            round(
+                collection.change_amount or 0,
+                2
+            ),
+
+            collection.transaction_count or 0,
+
+            collection.status.value
+            if collection.status
+            else "",
+
+            collection.notes or "",
+        ])
+
+    output.seek(0)
+
+    filename = "daily_collections_report.csv"
+
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition":
+                f'attachment; filename="{filename}"'
+        },
     )

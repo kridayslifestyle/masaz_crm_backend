@@ -1,254 +1,123 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import Optional
-from datetime import date
 
 from app.database import get_db
-from app.models import (
-    ServiceComplaint,
-    Store,
-    Chair,
-    ServiceStatus,
-    ServicePriority,
+from app.models import Settings
+from app.schemas.settings import (
+    SettingsResponse,
+    SettingsUpdate,
 )
 
-from app.schemas.service import (
-    ServiceComplaintCreate,
-    ServiceComplaintUpdate,
-)
 
 router = APIRouter(
-    prefix="/api/service/manage",   # ✅ FIXED PREFIX
-    tags=["Service Management"],
+    prefix="/api/settings",
+    tags=["Settings"],
 )
 
+
 # ---------------------------------------------------------
-# GET ALL COMPLAINTS
+# GET SETTINGS
 # ---------------------------------------------------------
 
-@router.get("/complaints")
-def get_service_complaints(
-    status: Optional[ServiceStatus] = None,
-    priority: Optional[ServicePriority] = None,
-    store_id: Optional[int] = None,
-    chair_id: Optional[int] = None,
+@router.get("/", response_model=SettingsResponse)
+def get_settings(
     db: Session = Depends(get_db),
 ):
-    query = db.query(ServiceComplaint)
+    settings = db.query(Settings).first()
 
-    if status:
-        query = query.filter(ServiceComplaint.status == status)
-
-    if priority:
-        query = query.filter(ServiceComplaint.priority == priority)
-
-    if store_id:
-        query = query.filter(ServiceComplaint.store_id == store_id)
-
-    if chair_id:
-        query = query.filter(ServiceComplaint.chair_id == chair_id)
-
-    complaints = (
-        query.order_by(ServiceComplaint.created_at.desc()).all()
-    )
-
-    result = []
-
-    for complaint in complaints:
-        result.append({
-            "id": complaint.id,
-
-            "store_id": complaint.store_id,
-            "store_name": complaint.store.name if complaint.store else None,
-
-            "chair_id": complaint.chair_id,
-            "machine_number": complaint.chair.machine_number if complaint.chair else None,
-            "device_id": complaint.chair.device_id if complaint.chair else None,
-
-            "complaint_date": complaint.complaint_date,
-            "reported_by": complaint.reported_by,
-
-            "customer_name": complaint.customer_name,
-            "customer_phone": complaint.customer_phone,
-
-            "problem_category": complaint.problem_category.value,
-            "problem_description": complaint.problem_description,
-
-            "priority": complaint.priority.value,
-            "status": complaint.status.value,
-
-            "technician_name": complaint.technician_name,
-            "visit_date": complaint.visit_date,
-
-            # 🔥 IMPORTANT FIELDS (you asked earlier)
-            "actual_problem": complaint.actual_problem,
-            "resolution_details": complaint.resolution_details,
-
-            "parts_replaced": complaint.parts_replaced,
-            "service_cost": complaint.service_cost,
-
-            "resolution_date": complaint.resolution_date,
-            "notes": complaint.notes,
-
-            "created_at": complaint.created_at,
-        })
-
-    return result
-
-
-# ---------------------------------------------------------
-# GET SINGLE COMPLAINT
-# ---------------------------------------------------------
-
-@router.get("/complaints/{complaint_id}")
-def get_service_complaint(
-    complaint_id: int,
-    db: Session = Depends(get_db),
-):
-    complaint = (
-        db.query(ServiceComplaint)
-        .filter(ServiceComplaint.id == complaint_id)
-        .first()
-    )
-
-    if not complaint:
-        raise HTTPException(
-            status_code=404,
-            detail="Service complaint not found",
+    # Create default settings if none exist
+    if not settings:
+        settings = Settings(
+            company_share_percentage=75,
+            store_share_percentage=25,
+            minimum_daily_revenue=500,
+            target_daily_revenue=1000,
+            alert_enabled=True,
+            whatsapp_enabled=False,
+            sms_enabled=False,
+            email_enabled=False,
         )
 
-    return complaint
+        db.add(settings)
+        db.commit()
+        db.refresh(settings)
+
+    return settings
 
 
 # ---------------------------------------------------------
-# CREATE COMPLAINT
+# UPDATE SETTINGS
 # ---------------------------------------------------------
 
-@router.post("/complaints", status_code=201)
-def create_service_complaint(
-    data: ServiceComplaintCreate,
+@router.put("/", response_model=SettingsResponse)
+def update_settings(
+    data: SettingsUpdate,
     db: Session = Depends(get_db),
 ):
-    # Check store
-    store = db.query(Store).filter(Store.id == data.store_id).first()
+    # Get existing settings
+    settings = db.query(Settings).first()
 
-    if not store:
-        raise HTTPException(status_code=404, detail="Store not found")
+    # Create if no settings record exists
+    if not settings:
+        settings = Settings(
+            company_share_percentage=75,
+            store_share_percentage=25,
+            minimum_daily_revenue=500,
+            target_daily_revenue=1000,
+            alert_enabled=True,
+            whatsapp_enabled=False,
+            sms_enabled=False,
+            email_enabled=False,
+        )
 
-    # Check chair
-    chair = db.query(Chair).filter(Chair.id == data.chair_id).first()
+        db.add(settings)
 
-    if not chair:
-        raise HTTPException(status_code=404, detail="Chair not found")
+    # Company + Store share must equal 100%
+    total_share = (
+        data.company_share_percentage
+        + data.store_share_percentage
+    )
 
-    if chair.store_id != data.store_id:
+    if abs(total_share - 100) > 0.01:
         raise HTTPException(
             status_code=400,
-            detail="Selected chair does not belong to selected store",
+            detail="Company Share % and Store Share % must total 100%",
         )
 
-    complaint = ServiceComplaint(**data.model_dump())
-
-    db.add(complaint)
-    db.commit()
-    db.refresh(complaint)
-
-    return complaint
-
-
-# ---------------------------------------------------------
-# UPDATE COMPLAINT
-# ---------------------------------------------------------
-
-@router.patch("/complaints/{complaint_id}")
-def update_service_complaint(
-    complaint_id: int,
-    data: ServiceComplaintUpdate,
-    db: Session = Depends(get_db),
-):
-    complaint = (
-        db.query(ServiceComplaint)
-        .filter(ServiceComplaint.id == complaint_id)
-        .first()
+    # Update values
+    settings.company_share_percentage = (
+        data.company_share_percentage
     )
 
-    if not complaint:
-        raise HTTPException(
-            status_code=404,
-            detail="Service complaint not found",
-        )
-
-    update_data = data.model_dump(exclude_unset=True)
-
-    for field, value in update_data.items():
-        setattr(complaint, field, value)
-
-    db.commit()
-    db.refresh(complaint)
-
-    return complaint
-
-
-# ---------------------------------------------------------
-# MARK IN PROGRESS
-# ---------------------------------------------------------
-
-@router.patch("/complaints/{complaint_id}/start")
-def start_service(
-    complaint_id: int,
-    db: Session = Depends(get_db),
-):
-    complaint = (
-        db.query(ServiceComplaint)
-        .filter(ServiceComplaint.id == complaint_id)
-        .first()
+    settings.store_share_percentage = (
+        data.store_share_percentage
     )
 
-    if not complaint:
-        raise HTTPException(
-            status_code=404,
-            detail="Service complaint not found",
-        )
-
-    complaint.status = ServiceStatus.in_progress
-    db.commit()
-
-    return {"message": "Service marked as in progress"}
-
-
-# ---------------------------------------------------------
-# RESOLVE COMPLAINT
-# ---------------------------------------------------------
-
-@router.patch("/complaints/{complaint_id}/resolve")
-def resolve_service(
-    complaint_id: int,
-    data: ServiceComplaintUpdate,
-    db: Session = Depends(get_db),
-):
-    complaint = (
-        db.query(ServiceComplaint)
-        .filter(ServiceComplaint.id == complaint_id)
-        .first()
+    settings.minimum_daily_revenue = (
+        data.minimum_daily_revenue
     )
 
-    if not complaint:
-        raise HTTPException(
-            status_code=404,
-            detail="Service complaint not found",
-        )
+    settings.target_daily_revenue = (
+        data.target_daily_revenue
+    )
 
-    update_data = data.model_dump(exclude_unset=True)
+    settings.alert_enabled = (
+        data.alert_enabled
+    )
 
-    for field, value in update_data.items():
-        setattr(complaint, field, value)
+    settings.whatsapp_enabled = (
+        data.whatsapp_enabled
+    )
 
-    complaint.status = ServiceStatus.resolved
+    settings.sms_enabled = (
+        data.sms_enabled
+    )
 
-    if not complaint.resolution_date:
-        complaint.resolution_date = date.today()
+    settings.email_enabled = (
+        data.email_enabled
+    )
 
     db.commit()
-    db.refresh(complaint)
+    db.refresh(settings)
 
-    return complaint
+    return settings
